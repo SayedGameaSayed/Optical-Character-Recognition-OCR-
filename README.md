@@ -30,8 +30,8 @@ app/
 
 ```bash
 # Clone
-git clone https://github.com/SayedGameaSayed/Optical-Character-Recognition-OCR-.git
-cd Optical-Character-Recognition-OCR-
+git clone https://github.com/yourusername/egyptian-id-ocr.git
+cd egyptian-id-ocr
 
 # Install
 pip install -r requirements.txt
@@ -61,9 +61,9 @@ docker run -p 8000:8000 egyptian-id-ocr
 **Response:**
 ```json
 {
-  "name": "سيد جامع سید حسین",
-  "address": "ابو عموری مركز نجع حمادى - قنا",
-  "national_id": "3009212701900",
+  "name": "أحمد محمد محمود علي",
+  "address": "١٥ شارع التحرير - الدقي - الجيزة",
+  "national_id": "29001011234567",
   "confidence_score": 0.8732
 }
 ```
