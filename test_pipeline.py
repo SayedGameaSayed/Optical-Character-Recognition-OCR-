@@ -12,6 +12,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import arabic_reshaper
+from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
 
 if sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
@@ -29,6 +31,22 @@ W, H = 1000, 630
 FONT_PATH = "C:/Windows/Fonts/arabtype.ttf"
 
 
+def prepare_arabic_text(text: str) -> str:
+    """Reshape and apply BIDI so Arabic renders correctly connected and RTL."""
+    reshaped = arabic_reshaper.reshape(text)
+    return get_display(reshaped)
+
+
+# Strings that should NOT be reshaped (Latin, digits-only, mixed)
+_RAW_STRINGS = {
+    "IS1866629", "٣٠٤٠٩٢١٢٧٠١٩٥٥", "٢٠٢٨/٠١/٠٨",
+}
+
+
+def _render_text(text: str) -> str:
+    return text if text in _RAW_STRINGS else prepare_arabic_text(text)
+
+
 def generate_fake_id() -> np.ndarray:
     """Generate a synthetic Egyptian ID card with Arabic text rendered via PIL."""
     img = Image.new("RGB", (W, H), (235, 235, 235))
@@ -40,7 +58,7 @@ def generate_fake_id() -> np.ndarray:
     font_id = ImageFont.truetype(FONT_PATH, 44)
 
     def _draw(text, x, y, font=font_medium, fill=(0, 0, 0)):
-        draw.text((x, y), text, font=font, fill=fill)
+        draw.text((x, y), _render_text(text), font=font, fill=fill)
 
     draw.rectangle([(0, 0), (W, 55)], fill=(45, 45, 130))
     _draw("جمهورية مصر العربية", 480, 12, font_medium, (255, 255, 255))
