@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+debug_output/
+test_fake_id.jpg
+_test_fake.jpg
