@@ -36,15 +36,16 @@ _REVERSED_KEYWORDS: set = {
     "يتح",    # حتى reversed
 }
 
-# Fields known to NOT be name/address/id — filter out
-NOISE_KEYWORDS: set = {
-    "جمهورية", "مصر", "العربية", "بطاقة", "تحقيق", "الشخصية",
-    "ذكر", "انثى", "أنثى", "مسلم", "مسيحي", "أعزب", "متزوج",
-    "مطلق", "أرمل", "طالب", "موظف", "عامل", "تاجر", "مهندس",
-    "طبيب", "سيدة", "السيدة", "الأستاذ", "الدكتور",
-    "البطاقة", "سارية", "حتى", "توقيع", "الإصدار", "الرقم",
-    "is", "no", "date", "birth", "sex", "religion", "status",
-    "occupation", "signature", "expiry",
+# Stop-words: boilerplate ID-card text and reversed variants.
+# Removed at word-level so that real name/address words survive.
+STOP_WORDS: set = {
+    "بطاقة", "تحقيق", "الشخصية", "جمهورية", "مصر", "العربية",
+    "ذكر", "انثى", "مسلم", "مسيحي", "اعزب", "أعزب", "متزوج",
+    "طالب", "سارية", "حتى", "الرقم", "القومي",
+    # reversed variants
+    "ةقاطب", "قيقحت", "ةيصخشلا", "ةيروهمج", "رصم", "ةيبرعلا",
+    "ركذ", "ىثنا", "ملسم", "يحيسم", "بزعأ", "جوزتم", "بلاط",
+    "ةيراس", "ىتح",
 }
 
 def _to_western(text: str) -> str:
@@ -64,15 +65,32 @@ def _fix_reversed(text: str) -> str:
     return text
 
 
-def _is_noise(text: str) -> bool:
-    """Check if a text fragment is a known noise field."""
-    cleaned = text.strip().lower()
-    # Remove diacritics and common Arabic ligature artifacts for matching
+def _remove_stop_words(text: str) -> str:
+    """Remove any STOP_WORDS from the text at word level."""
+    cleaned = text.strip()
     cleaned = re.sub(r"[\u064B-\u065F\u0670]", "", cleaned)
-    for kw in NOISE_KEYWORDS:
-        if kw in cleaned:
-            return True
+    words = cleaned.split()
+    kept = [w for w in words if w not in STOP_WORDS]
+    return " ".join(kept)
+
+
+def _contains_date(text: str) -> bool:
+    """Check if text contains a date pattern like ٢٠٢٨/٠١/٠٨."""
+    western = _to_western(text)
+    if re.search(r"\d{4}/\d{1,2}/\d{1,2}", western):
+        return True
+    if re.search(r"/\d", western) or re.search(r"\d/", western):
+        return True
     return False
+
+
+def _is_predominantly_numbers(text: str) -> bool:
+    """Check if more than half the characters are digits."""
+    western = _to_western(text)
+    digits = re.sub(r"\D", "", western)
+    if not digits:
+        return False
+    return len(digits) > len(text) / 2
 
 
 def _extract_national_id(candidates: List[str]) -> Optional[str]:
@@ -105,9 +123,15 @@ def _extract_arabic_name(
 
     for text in candidates:
         cleaned = _fix_reversed(text.strip())
+        # 1. Remove stop-words at word level
+        cleaned = _remove_stop_words(cleaned)
         if not cleaned or len(cleaned) < 3:
             continue
-        if _is_noise(cleaned):
+        # 2. Discard lines containing dates
+        if _contains_date(cleaned):
+            continue
+        # 3. Discard lines that are mostly numbers
+        if _is_predominantly_numbers(cleaned):
             continue
         western = _to_western(cleaned)
         digits_only = re.sub(r"[^0-9]", "", western)
@@ -164,17 +188,20 @@ def _extract_address(
 
     for text in candidates:
         cleaned = _fix_reversed(text.strip())
+        cleaned = _remove_stop_words(cleaned)
         if not cleaned or len(cleaned) < 5:
             continue
         if cleaned in name:
+            continue
+        if _contains_date(cleaned):
+            continue
+        if _is_predominantly_numbers(cleaned):
             continue
         western = _to_western(cleaned)
         digits_only = re.sub(r"[^0-9]", "", western)
         if national_id and digits_only == national_id:
             continue
         if digits_only and len(digits_only) >= 10:
-            continue
-        if _is_noise(cleaned):
             continue
         if not re.search(r"[\u0600-\u06FF]", cleaned):
             continue

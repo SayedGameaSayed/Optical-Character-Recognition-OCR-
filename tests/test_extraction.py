@@ -155,3 +155,20 @@ class TestValidator:
         assert parsed["national_id"] == "30409212701955"
         assert "بطاقة" not in parsed["name"]
         assert "سيد" in parsed["name"]
+
+    def test_date_line_filtered(self):
+        results = _make_ocr_result([
+            "البطاقة سارية حتى ٢٠٢٨/٠١/٠٨",
+        ])
+        parsed = validate_and_parse(results)
+        assert parsed["name"] == ""
+
+    def test_stop_word_removed_from_line(self):
+        results = _make_ocr_result([
+            "بطاقة سيد جامع",  # "بطاقة" is a stop-word and should be removed
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
+        ])
+        parsed = validate_and_parse(results)
+        assert parsed["national_id"] == "30409212701955"
+        assert "سيد" in parsed["name"]
+        assert "بطاقة" not in parsed["name"]
