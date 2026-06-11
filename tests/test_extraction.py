@@ -31,10 +31,10 @@ class TestValidator:
     def test_national_id_eastern_digits(self):
         results = _make_ocr_result([
             "بطاقة تحقيق الشخصية",
-            "۳۰۰۹۲۱۲۷۰۱۹۰۰",
+            "۳۰۴۰۹۲۱۲۷۰۱۹۵۵",
         ])
         parsed = validate_and_parse(results)
-        assert parsed["national_id"] == "3009212701900"
+        assert parsed["national_id"] == "30409212701955"
 
     def test_national_id_mixed_digits(self):
         results = _make_ocr_result([
@@ -50,13 +50,13 @@ class TestValidator:
             "مسلم",
             "أعزب",
             "طالب",
-            "٣٠٠٩٢١٢٧٠١٩٠٠",
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
             "ابو عموری مركز نجع حمادى - قنا",
         ])
         parsed = validate_and_parse(results)
         assert "ذكر" not in parsed["name"]
         assert "مسلم" not in parsed["name"]
-        assert parsed["national_id"] == "3009212701900"
+        assert parsed["national_id"] == "30409212701955"
         assert len(parsed["name"]) > 0
 
     def test_empty_ocr_results(self):
@@ -71,7 +71,7 @@ class TestValidator:
             "بطاقة تحقيق الشخصية",
             "جمهورية مصر العربية",
             "سيد جامع سید حسین",
-            "٣٠٠٩٢١٢٧٠١٩٠٠",
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
             "ابو عموری",
             "مركز نجع حمادى - قنا",
         ])
@@ -83,7 +83,7 @@ class TestValidator:
         results = _make_ocr_result([
             "بطاقة تحقيق الشخصية",
             "سيد جامع سید حسین",
-            "٣٠٠٩٢١٢٧٠١٩٠٠",
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
             "ابو عموری مركز نجع حمادى - قنا",
         ])
         parsed = validate_and_parse(results)
@@ -91,7 +91,7 @@ class TestValidator:
 
     def test_confidence_score(self):
         results = _make_ocr_result(
-            ["سيد جامع", "٣٠٠٩٢١٢٧٠١٩٠٠"],
+            ["سيد جامع", "٣٠٤٠٩٢١٢٧٠١٩٥٥"],
             conf=0.75,
         )
         parsed = validate_and_parse(results)

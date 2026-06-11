@@ -4,10 +4,16 @@ import logging
 import re
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
+
 logger = logging.getLogger(__name__)
 
-# Eastern Arabic numerals used in Arabic text
-EASTERN_TO_WESTERN = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+# Eastern Arabic numerals (two Unicode ranges)
+# U+0660-U+0669: Arabic-Indic (used in Arabic)
+# U+06F0-U+06F9: Extended Arabic-Indic (used in Persian/Urdu)
+_EASTERN_DIGITS = "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹"
+_WESTERN_DIGITS = "0123456789" * 2
+EASTERN_TO_WESTERN = str.maketrans(_EASTERN_DIGITS, _WESTERN_DIGITS)
 
 # Fields known to NOT be name/address/id — filter out
 NOISE_KEYWORDS: set = {
@@ -41,14 +47,10 @@ def _is_noise(text: str) -> bool:
 
 
 def _extract_national_id(candidates: List[str]) -> Optional[str]:
-    """Search for exactly 14 consecutive digits in any candidate.
-
-    Handles both Eastern and Western numerals.
-    """
+    """Search for exactly 14 consecutive digits in any candidate."""
     for text in candidates:
         western = _to_western(text)
-        # Remove all non-digit characters
-        digits_only = re.sub(r"\D", "", western)
+        digits_only = re.sub(r"[^0-9]", "", western)
         if NATIONAL_ID_PATTERN.match(digits_only):
             return digits_only
     return None
@@ -75,8 +77,11 @@ def _extract_arabic_name(
         if _is_noise(cleaned):
             continue
         western = _to_western(cleaned)
-        digits_only = re.sub(r"\D", "", western)
+        digits_only = re.sub(r"[^0-9]", "", western)
         if national_id and digits_only == national_id:
+            continue
+        # Skip lines that are purely numeric (likely misread national ID)
+        if digits_only and len(digits_only) >= 10:
             continue
         # Check that it contains at least some Arabic script
         if not re.search(r"[\u0600-\u06FF]", cleaned):
@@ -131,8 +136,10 @@ def _extract_address(
         if cleaned in name:
             continue
         western = _to_western(cleaned)
-        digits_only = re.sub(r"\D", "", western)
+        digits_only = re.sub(r"[^0-9]", "", western)
         if national_id and digits_only == national_id:
+            continue
+        if digits_only and len(digits_only) >= 10:
             continue
         if _is_noise(cleaned):
             continue

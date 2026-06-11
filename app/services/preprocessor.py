@@ -64,7 +64,14 @@ def _detect_card_contour(image: np.ndarray) -> Optional[np.ndarray]:
 
     contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
+    h, w = image.shape[:2]
+    total_area = h * w
+    MIN_CONTOUR_AREA = 0.6 * total_area
+
     for contour in contours:
+        area = cv2.contourArea(contour)
+        if area < MIN_CONTOUR_AREA:
+            continue
         peri = cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
         if len(approx) == 4:
@@ -103,7 +110,7 @@ def _denoise_and_binarize(card: np.ndarray) -> np.ndarray:
 
     binary = cv2.adaptiveThreshold(
         denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV, ADAPTIVE_BLOCK_SIZE, ADAPTIVE_C,
+        cv2.THRESH_BINARY, ADAPTIVE_BLOCK_SIZE, ADAPTIVE_C,
     )
 
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, MORPH_KERNEL_SIZE)
@@ -121,6 +128,19 @@ def _save_debug(
     cv2.imwrite(str(filepath), image)
     logger.debug("Saved debug image: %s", filepath)
     return str(filepath)
+
+
+def _enhance_for_ocr(card: np.ndarray) -> np.ndarray:
+    """Gentle denoising only — PaddleOCR handles its own internal preprocessing."""
+    gray = cv2.cvtColor(card, cv2.COLOR_BGR2GRAY) if card.ndim == 3 else card
+
+    denoised = cv2.fastNlMeansDenoising(
+        gray, h=DENOISE_H,
+        templateWindowSize=DENOISE_TEMPLATE_WINDOW,
+        searchWindowSize=DENOISE_SEARCH_WINDOW,
+    )
+
+    return cv2.cvtColor(denoised, cv2.COLOR_GRAY2BGR)
 
 
 def preprocess_image(
@@ -145,9 +165,9 @@ def preprocess_image(
         if debug:
             _save_debug(warped, "02_no_warp_fallback.jpg", debug_dir)
 
-    preprocessed = _denoise_and_binarize(warped)
+    preprocessed = _enhance_for_ocr(warped)
 
     if debug:
-        _save_debug(preprocessed, "03_preprocessed.jpg", debug_dir)
+        _save_debug(preprocessed, "03_enhanced.jpg", debug_dir)
 
     return preprocessed
