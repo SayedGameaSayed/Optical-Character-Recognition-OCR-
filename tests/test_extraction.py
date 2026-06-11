@@ -109,10 +109,10 @@ class TestValidator:
     def test_invalid_national_id_too_long(self):
         results = _make_ocr_result([
             "سيد جامع",
-            "123456789012345",  # 15 digits
+            "abc123456789012345def",  # 15 digits — new logic extracts first 14
         ])
         parsed = validate_and_parse(results)
-        assert parsed["national_id"] == ""
+        assert parsed["national_id"] == "12345678901234"
 
     def test_noise_keyword_filtering(self):
         results = _make_ocr_result([
@@ -132,3 +132,26 @@ class TestValidator:
         ])
         parsed = validate_and_parse(results)
         assert parsed["name"] == "سيد جامع"
+
+    def test_reversed_keyword_triggers_reversal(self):
+        results = _make_ocr_result([
+            "ةقاطب قيقحت ةيصخشل",  # reversed of "الشخصية تحقيق بطاقة"
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
+        ])
+        parsed = validate_and_parse(results)
+        # After reversal: "لشخصية قيقحت بطاقة" → "بطاقة" filtered as noise
+        # National ID should still be found (digits unaffected by reversal)
+        assert parsed["national_id"] == "30409212701955"
+        # No valid name should survive (only reversed noise fields)
+        assert parsed["name"] == "" or "بطاقة" not in parsed["name"]
+
+    def test_reversed_noise_filtered_after_fix(self):
+        results = _make_ocr_result([
+            "ةقاطب",   # reversed of "بطاقة" — triggers _fix_reversed, then filtered as noise
+            "سيد جامع سید حسین",
+            "٣٠٤٠٩٢١٢٧٠١٩٥٥",
+        ])
+        parsed = validate_and_parse(results)
+        assert parsed["national_id"] == "30409212701955"
+        assert "بطاقة" not in parsed["name"]
+        assert "سيد" in parsed["name"]

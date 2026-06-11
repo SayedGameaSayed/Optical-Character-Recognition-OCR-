@@ -15,6 +15,27 @@ _EASTERN_DIGITS = "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹"
 _WESTERN_DIGITS = "0123456789" * 2
 EASTERN_TO_WESTERN = str.maketrans(_EASTERN_DIGITS, _WESTERN_DIGITS)
 
+# Reversed-keyword fragments that indicate PIL/BIDI rendering artifact.
+# If any of these appear in a candidate, the entire text is reversed.
+_REVERSED_KEYWORDS: set = {
+    "ةقاطب",  # بطاقة reversed
+    "مسا",    # اسم reversed
+    "ونعلت",  # العنوان reversed (partial)
+    "سنجلت",  # الجنس reversed (partial)
+    "ةيصخشل", # الشخصية reversed (partial)
+    "ةنهمللل",# المهنة reversed (partial)
+    "ةيءاس",  # سارية reversed
+    "ةقاطبلت",# البطاقة reversed (partial)
+    "ةيعامت",  # الاجتماعية reversed (partial)
+    "ةلااحل", # الحالة reversed (partial)
+    "ةنايدلت",# الديانة reversed (partial)
+    "ءزعء",   # أعزب reversed (partial)
+    "بلاط",   # طالب reversed (partial)
+    "ءاءومج", # جمهورية reversed (partial)
+    "ركآ",    # أكبر / ذكر reversed (partial)
+    "يتح",    # حتى reversed
+}
+
 # Fields known to NOT be name/address/id — filter out
 NOISE_KEYWORDS: set = {
     "جمهورية", "مصر", "العربية", "بطاقة", "تحقيق", "الشخصية",
@@ -26,13 +47,21 @@ NOISE_KEYWORDS: set = {
     "occupation", "signature", "expiry",
 }
 
-# National ID pattern: exactly 14 digits (after conversion)
-NATIONAL_ID_PATTERN = re.compile(r"^\d{14}$")
-
-
 def _to_western(text: str) -> str:
     """Convert Eastern Arabic numerals to Western digits in-place."""
     return text.translate(EASTERN_TO_WESTERN)
+
+
+def _fix_reversed(text: str) -> str:
+    """Detect reversed synthetic Arabic text and reverse it.
+
+    PIL/BIDI rendering can produce reversed fragments; if a known
+    reversed keyword is found, the whole string is flipped back.
+    """
+    for kw in _REVERSED_KEYWORDS:
+        if kw in text:
+            return text[::-1]
+    return text
 
 
 def _is_noise(text: str) -> bool:
@@ -47,13 +76,17 @@ def _is_noise(text: str) -> bool:
 
 
 def _extract_national_id(candidates: List[str]) -> Optional[str]:
-    """Search for exactly 14 consecutive digits in any candidate."""
-    for text in candidates:
-        western = _to_western(text)
-        digits_only = re.sub(r"[^0-9]", "", western)
-        if NATIONAL_ID_PATTERN.match(digits_only):
-            return digits_only
-    return None
+    """Aggressively extract a 14-digit national ID from all OCR text.
+
+    PaddleOCR may split the 14-digit number across multiple regions
+    or inject spaces/punctuation.  Join all digit runs from every
+    candidate, then search for a contiguous 14-digit block.
+    """
+    raw = " ".join(candidates)
+    western = _to_western(raw)
+    all_digits = "".join(re.findall(r"\d+", western))
+    match = re.search(r"\d{14}", all_digits)
+    return match.group(0) if match else None
 
 
 def _extract_arabic_name(
@@ -71,7 +104,7 @@ def _extract_arabic_name(
     valid_lines: List[str] = []
 
     for text in candidates:
-        cleaned = text.strip()
+        cleaned = _fix_reversed(text.strip())
         if not cleaned or len(cleaned) < 3:
             continue
         if _is_noise(cleaned):
@@ -130,7 +163,7 @@ def _extract_address(
     address_candidates: List[str] = []
 
     for text in candidates:
-        cleaned = text.strip()
+        cleaned = _fix_reversed(text.strip())
         if not cleaned or len(cleaned) < 5:
             continue
         if cleaned in name:
